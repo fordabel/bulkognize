@@ -347,7 +347,8 @@
         html += '<span class="badge ' + scoreClass + '">' + p.score + '%</span>';
 
         if (p.category) {
-            html += '<span class="badge badge-category">' + escapeHtml(p.category) + '</span>';
+            var shortCategory = p.category.split(" / ")[0];
+            html += '<span class="badge badge-category">' + escapeHtml(shortCategory) + '</span>';
         }
 
         if (p.bricklink_url) {

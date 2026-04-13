@@ -14,6 +14,8 @@ import base64
 import tempfile
 from datetime import datetime
 
+import re
+
 import requests
 from flask import (
     Flask, render_template, request, jsonify, send_file, session
@@ -140,9 +142,74 @@ def bulk_predict():
     })
 
 
+TYPE_MAP = {
+    "minifig": "M", "fig": "M",
+    "part": "P",
+    "set": "S",
+    "gear": "G",
+    "book": "B",
+    "catalog": "C",
+}
+
+
+def fetch_bricklink_prices(item_id, item_type_raw):
+    """Scrape BrickLink price guide for an item. Returns dict with price fields."""
+    empty = {
+        "last6_new_avg": "", "last6_used_avg": "",
+        "current_new_avg": "", "current_used_avg": "",
+    }
+    if not item_id:
+        return empty
+    type_code = TYPE_MAP.get(item_type_raw.lower(), "M") if item_type_raw else "M"
+    url = f"https://www.bricklink.com/catalogPG.asp?{type_code}={item_id}&ColorID=0"
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/120.0.0.0 Safari/537.36",
+        }
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        html = resp.text
+
+        # BrickLink price guide has a 4-column summary table:
+        #   Last 6 Months Sales: New | Used
+        #   Current Items for Sale: New | Used
+        # Each column has: Times Sold/Total Lots, Total Qty, Min, Avg, Qty Avg, Max
+        # We find the summary row (BGCOLOR="#C0C0C0") that contains all 4 <TD VALIGN="TOP"> cells.
+
+        # Extract all "Avg Price" values in order from the summary block.
+        # The page layout puts them in order: last6_new, last6_used, current_new, current_used
+        # Each column has two "Avg Price" entries (Avg Price and Qty Avg Price).
+        # We want the first "Avg Price" from each column (not "Qty Avg Price").
+        avg_pattern = re.compile(
+            r'>Avg Price:.*?<B>US&nbsp;\$([\d,.]+)</B>', re.DOTALL
+        )
+        matches = avg_pattern.findall(html)
+
+        # The first 4 Avg Price values correspond to:
+        # [0] = Last 6 Mo New, [1] = Last 6 Mo Used,
+        # [2] = Current New, [3] = Current Used
+        # (Each column also has a "Qty Avg Price" so actual matches may be doubled)
+        # Filter to get every other one (Avg Price, skip Qty Avg Price)
+        keys = ["last6_new_avg", "last6_used_avg", "current_new_avg", "current_used_avg"]
+        prices = {}
+        avg_idx = 0
+        for i, val in enumerate(matches):
+            if i % 2 == 0 and avg_idx < 4:  # Take 1st, skip 2nd (Qty Avg) per column
+                prices[keys[avg_idx]] = val
+                avg_idx += 1
+
+        return {k: prices.get(k, "") for k in empty}
+
+    except Exception:
+        return empty
+
+
 @app.route("/api/bulk/csv")
 def bulk_csv():
-    """Download last bulk results as CSV."""
+    """Download last bulk results as CSV with BrickLink pricing."""
     sid = session.get("session_id", "")
     results_path = os.path.join(RESULTS_DIR, f"{sid}.json")
 
@@ -155,24 +222,34 @@ def bulk_csv():
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "Source Image", "Prediction Rank", "Item ID", "Name",
-        "Confidence %", "Category", "Type", "BrickLink URL", "Image URL"
+        "Source Image", "Prediction Rank", "Confidence %",
+        "Item ID", "Name",
+        "BL Last 6 Mo Avg (New)", "BL Last 6 Mo Avg (Used)",
+        "BL Current For Sale Avg (New)", "BL Current For Sale Avg (Used)",
+        "BrickLink URL",
     ])
 
     for result in all_results:
         filename = result.get("filename", "")
         for rank, pred in enumerate(result.get("predictions", []), 1):
+            item_id = pred.get("id", "")
+            item_type = pred.get("type", "")
+            prices = fetch_bricklink_prices(item_id, item_type)
+
             writer.writerow([
                 filename,
                 rank,
-                pred.get("id", ""),
-                pred.get("name", ""),
                 pred.get("score", ""),
-                pred.get("category", ""),
-                pred.get("type", ""),
+                item_id,
+                pred.get("name", ""),
+                prices["last6_new_avg"],
+                prices["last6_used_avg"],
+                prices["current_new_avg"],
+                prices["current_used_avg"],
                 pred.get("bricklink_url", ""),
-                pred.get("img_url", ""),
             ])
+            # Small delay to be respectful to BrickLink
+            time.sleep(0.5)
 
     output.seek(0)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

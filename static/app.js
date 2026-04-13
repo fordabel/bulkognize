@@ -261,6 +261,44 @@
     }
 
     // ============================================================
+    //  CSV DOWNLOAD (fetch + blob so iPad PWA doesn't navigate away)
+    // ============================================================
+
+    var csvBtn = document.getElementById("bulk-csv-btn");
+    csvBtn.addEventListener("click", function () {
+        csvBtn.disabled = true;
+        csvBtn.innerHTML = '<span class="btn-icon">&#9203;</span> Fetching prices...';
+
+        fetch("/api/bulk/csv")
+            .then(function (resp) {
+                if (!resp.ok) throw new Error("No results");
+                var disposition = resp.headers.get("Content-Disposition") || "";
+                var match = disposition.match(/filename=(.+)/);
+                var filename = match ? match[1] : "bulkognize_results.csv";
+                return resp.blob().then(function (blob) {
+                    return { blob: blob, filename: filename };
+                });
+            })
+            .then(function (result) {
+                var url = URL.createObjectURL(result.blob);
+                var a = document.createElement("a");
+                a.href = url;
+                a.download = result.filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                csvBtn.disabled = false;
+                csvBtn.innerHTML = '<span class="btn-icon">&#128190;</span> Download CSV';
+            })
+            .catch(function () {
+                csvBtn.disabled = false;
+                csvBtn.innerHTML = '<span class="btn-icon">&#128190;</span> Download CSV';
+                alert("No bulk results found. Run a bulk scan first.");
+            });
+    });
+
+    // ============================================================
     //  SERVICE WORKER REGISTRATION
     // ============================================================
 

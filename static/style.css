@@ -428,8 +428,8 @@ body {
 }
 
 .prediction-thumb {
-    width: 72px;
-    height: 72px;
+    width: 140px;
+    height: 140px;
     object-fit: contain;
     border-radius: 8px;
     background: var(--bg);
@@ -532,8 +532,8 @@ body {
 
 /* Bulk result: source image thumbnail */
 .bulk-source-img {
-    width: 60px;
-    height: 60px;
+    width: 80px;
+    height: 80px;
     object-fit: cover;
     border-radius: 8px;
     border: 1px solid var(--border);

@@ -125,7 +125,7 @@
                 bulkProgressFill.style.width = fakeProgress + "%";
                 var estimated = Math.min(Math.floor(fakeProgress / 100 * total), total - 1);
                 bulkProgressCount.textContent = estimated + " / " + total;
-                bulkProgressText.textContent = "Identifying minifigs...";
+                bulkProgressText.textContent = "Identifying LEGO pieces...";
             }
         }, 500);
 

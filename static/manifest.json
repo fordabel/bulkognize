@@ -1,7 +1,7 @@
 {
     "name": "Bulkognize",
     "short_name": "Bulkognize",
-    "description": "LEGO Minifig Identification for Bricks & Minifigs",
+    "description": "LEGO Piece Identification for Bricks & Minifigs",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#F4F0E8",

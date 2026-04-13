@@ -24,81 +24,29 @@
         </div>
     </header>
 
-    <!-- Tab Bar -->
-    <nav class="tab-bar">
-        <button class="tab-btn active" data-tab="quick" id="tab-quick">
-            <span class="tab-icon">&#128247;</span>
-            Quick ID
-        </button>
-        <button class="tab-btn" data-tab="bulk" id="tab-bulk">
-            <span class="tab-icon">&#128230;</span>
-            Bulk Upload
-        </button>
-    </nav>
-
-    <!-- Quick ID Tab -->
-    <main class="tab-content active" id="panel-quick">
-        <div class="card upload-card">
-            <h2>Identify a Minifig</h2>
-            <p class="hint">Take a photo or pick an image</p>
-
-            <div class="upload-buttons">
-                <label class="btn btn-primary btn-large" for="quick-camera">
-                    <span class="btn-icon">&#128247;</span>
-                    Take Photo
-                </label>
-                <input type="file" id="quick-camera" accept="image/*" capture="environment" hidden>
-
-                <label class="btn btn-secondary btn-large" for="quick-file">
-                    <span class="btn-icon">&#128193;</span>
-                    Choose File
-                </label>
-                <input type="file" id="quick-file" accept="image/*" hidden>
-            </div>
-
-            <!-- Preview of selected image -->
-            <div class="preview-area" id="quick-preview" style="display:none;">
-                <img id="quick-preview-img" alt="Selected image">
-                <button class="btn btn-small btn-muted" id="quick-clear">Clear</button>
-            </div>
-
-            <button class="btn btn-accent btn-large btn-full" id="quick-submit" style="display:none;">
-                <span class="btn-icon">&#128270;</span>
-                Identify This Minifig
-            </button>
-        </div>
-
-        <!-- Loading -->
-        <div class="card" id="quick-loading" style="display:none;">
-            <div class="loader"></div>
-            <p class="loading-text">Identifying minifig...</p>
-        </div>
-
-        <!-- Error -->
-        <div class="card card-error" id="quick-error" style="display:none;">
-            <p id="quick-error-msg"></p>
-            <button class="btn btn-small btn-muted" id="quick-error-dismiss">Dismiss</button>
-        </div>
-
-        <!-- Results -->
-        <div id="quick-results" style="display:none;"></div>
-    </main>
-
-    <!-- Bulk Upload Tab -->
-    <main class="tab-content" id="panel-bulk">
+    <!-- Main Content -->
+    <main>
         <div class="card upload-card">
             <h2>Bulk Identify</h2>
             <p class="hint">Upload multiple images at once</p>
 
-            <div class="drop-zone" id="bulk-drop">
-                <span class="drop-icon">&#128230;</span>
-                <p>Drag images here</p>
-                <p class="hint">or</p>
-                <label class="btn btn-primary btn-large" for="bulk-files">
+            <div class="upload-buttons">
+                <label class="btn btn-primary btn-large" for="bulk-camera">
+                    <span class="btn-icon">&#128247;</span>
+                    Take Photo
+                </label>
+                <input type="file" id="bulk-camera" accept="image/*" capture="environment" hidden>
+
+                <label class="btn btn-secondary btn-large" for="bulk-files">
                     <span class="btn-icon">&#128193;</span>
                     Choose Files
                 </label>
                 <input type="file" id="bulk-files" accept="image/*" multiple hidden>
+            </div>
+
+            <div class="drop-zone" id="bulk-drop">
+                <span class="drop-icon">&#128230;</span>
+                <p>or drag images here</p>
             </div>
 
             <div id="bulk-file-list" class="file-list" style="display:none;"></div>
@@ -137,8 +85,6 @@
             </div>
             <div id="bulk-results-list"></div>
         </div>
-    </main>
-
     <script src="/static/app.js"></script>
 </body>
 </html>

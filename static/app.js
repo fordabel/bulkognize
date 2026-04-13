@@ -5,133 +5,12 @@
 (function () {
     "use strict";
 
-    // ---- Tab switching ----
-    const tabBtns = document.querySelectorAll(".tab-btn");
-    const tabPanels = document.querySelectorAll(".tab-content");
-
-    tabBtns.forEach(function (btn) {
-        btn.addEventListener("click", function () {
-            const target = btn.dataset.tab;
-            tabBtns.forEach(function (b) { b.classList.remove("active"); });
-            tabPanels.forEach(function (p) { p.classList.remove("active"); });
-            btn.classList.add("active");
-            document.getElementById("panel-" + target).classList.add("active");
-        });
-    });
-
     // ============================================================
-    //  QUICK ID
-    // ============================================================
-
-    var quickFile = null;
-
-    var quickCamera = document.getElementById("quick-camera");
-    var quickFileInput = document.getElementById("quick-file");
-    var quickPreview = document.getElementById("quick-preview");
-    var quickPreviewImg = document.getElementById("quick-preview-img");
-    var quickSubmit = document.getElementById("quick-submit");
-    var quickClear = document.getElementById("quick-clear");
-    var quickLoading = document.getElementById("quick-loading");
-    var quickError = document.getElementById("quick-error");
-    var quickErrorMsg = document.getElementById("quick-error-msg");
-    var quickErrorDismiss = document.getElementById("quick-error-dismiss");
-    var quickResults = document.getElementById("quick-results");
-
-    function handleQuickFile(file) {
-        if (!file) return;
-        quickFile = file;
-        var reader = new FileReader();
-        reader.onload = function (e) {
-            quickPreviewImg.src = e.target.result;
-            quickPreview.style.display = "block";
-            quickSubmit.style.display = "block";
-            quickResults.style.display = "none";
-        };
-        reader.readAsDataURL(file);
-    }
-
-    quickCamera.addEventListener("change", function () {
-        handleQuickFile(this.files[0]);
-    });
-
-    quickFileInput.addEventListener("change", function () {
-        handleQuickFile(this.files[0]);
-    });
-
-    quickClear.addEventListener("click", function () {
-        quickFile = null;
-        quickPreview.style.display = "none";
-        quickSubmit.style.display = "none";
-        quickCamera.value = "";
-        quickFileInput.value = "";
-    });
-
-    quickErrorDismiss.addEventListener("click", function () {
-        quickError.style.display = "none";
-    });
-
-    quickSubmit.addEventListener("click", function () {
-        if (!quickFile) return;
-
-        quickLoading.style.display = "block";
-        quickError.style.display = "none";
-        quickResults.style.display = "none";
-        quickSubmit.disabled = true;
-
-        var formData = new FormData();
-        formData.append("image", quickFile);
-
-        fetch("/api/predict", { method: "POST", body: formData })
-            .then(function (resp) { return resp.json(); })
-            .then(function (data) {
-                quickLoading.style.display = "none";
-                quickSubmit.disabled = false;
-
-                if (data.error) {
-                    quickErrorMsg.textContent = data.error;
-                    quickError.style.display = "flex";
-                    return;
-                }
-
-                renderQuickResults(data);
-            })
-            .catch(function (err) {
-                quickLoading.style.display = "none";
-                quickSubmit.disabled = false;
-                quickErrorMsg.textContent = "Could not connect to the server. Please try again.";
-                quickError.style.display = "flex";
-            });
-    });
-
-    function renderQuickResults(data) {
-        var predictions = data.predictions || [];
-        if (predictions.length === 0) {
-            quickResults.innerHTML = '<div class="card no-results">No matches found. Try a clearer photo.</div>';
-            quickResults.style.display = "block";
-            return;
-        }
-
-        var html = '<div class="result-card">';
-        html += '<div class="result-card-body">';
-        html += '<div class="quick-result-layout">';
-        html += '<img class="quick-uploaded-img" src="' + escapeAttr(data.uploaded_image) + '" alt="Your photo">';
-        html += '<div style="flex:1">';
-
-        predictions.forEach(function (p, i) {
-            html += renderPredictionRow(p, i);
-        });
-
-        html += '</div></div></div></div>';
-        quickResults.innerHTML = html;
-        quickResults.style.display = "block";
-        quickResults.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-
-    // ============================================================
-    //  BULK UPLOAD
+    //  BULK UPLOAD (with camera support)
     // ============================================================
 
     var bulkFileList = [];
+    var bulkCamera = document.getElementById("bulk-camera");
     var bulkFilesInput = document.getElementById("bulk-files");
     var bulkDrop = document.getElementById("bulk-drop");
     var bulkFileListEl = document.getElementById("bulk-file-list");
@@ -146,6 +25,19 @@
     var bulkResults = document.getElementById("bulk-results");
     var bulkResultsList = document.getElementById("bulk-results-list");
     var bulkResultsTitle = document.getElementById("bulk-results-title");
+
+    // Camera: each photo adds to the queue
+    bulkCamera.addEventListener("change", function () {
+        if (this.files[0]) {
+            addBulkFiles(this.files);
+            this.value = ""; // reset so they can take another photo right away
+        }
+    });
+
+    // File picker: select multiple existing photos
+    bulkFilesInput.addEventListener("change", function () {
+        addBulkFiles(this.files);
+    });
 
     // Drag and drop
     ["dragenter", "dragover"].forEach(function (evt) {
@@ -163,12 +55,7 @@
     });
 
     bulkDrop.addEventListener("drop", function (e) {
-        var files = e.dataTransfer.files;
-        addBulkFiles(files);
-    });
-
-    bulkFilesInput.addEventListener("change", function () {
-        addBulkFiles(this.files);
+        addBulkFiles(e.dataTransfer.files);
     });
 
     function addBulkFiles(files) {
@@ -200,6 +87,8 @@
         bulkFileListEl.innerHTML = html;
         bulkFileListEl.style.display = "block";
         bulkSubmit.style.display = "block";
+        bulkSubmit.textContent = "";
+        bulkSubmit.innerHTML = '<span class="btn-icon">&#128270;</span> Identify All (' + bulkFileList.length + ')';
 
         // Bind remove buttons
         bulkFileListEl.querySelectorAll(".file-remove").forEach(function (btn) {
@@ -329,7 +218,7 @@
     }
 
     // ============================================================
-    //  SHARED HELPERS
+    //  HELPERS
     // ============================================================
 
     function renderPredictionRow(p, index) {

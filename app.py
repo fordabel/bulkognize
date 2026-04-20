@@ -176,30 +176,16 @@ def fetch_bricklink_prices(item_id, item_type_raw):
         # BrickLink price guide has a 4-column summary table:
         #   Last 6 Months Sales: New | Used
         #   Current Items for Sale: New | Used
-        # Each column has: Times Sold/Total Lots, Total Qty, Min, Avg, Qty Avg, Max
-        # We find the summary row (BGCOLOR="#C0C0C0") that contains all 4 <TD VALIGN="TOP"> cells.
-
-        # Extract all "Avg Price" values in order from the summary block.
-        # The page layout puts them in order: last6_new, last6_used, current_new, current_used
-        # Each column has two "Avg Price" entries (Avg Price and Qty Avg Price).
-        # We want the first "Avg Price" from each column (not "Qty Avg Price").
+        # Each column has: Times Sold/Total Lots, Total Qty, Min, Avg, Qty Avg, Max.
+        # We want "Avg Price" (not "Qty Avg Price") from each of the 4 columns, in order.
+        # Negative lookbehind excludes the "Qty Avg Price" rows.
         avg_pattern = re.compile(
-            r'>Avg Price:.*?<B>US&nbsp;\$([\d,.]+)</B>', re.DOTALL
+            r'(?<!Qty )Avg Price:.*?<B>US&nbsp;\$([\d,.]+)</B>', re.DOTALL
         )
         matches = avg_pattern.findall(html)
 
-        # The first 4 Avg Price values correspond to:
-        # [0] = Last 6 Mo New, [1] = Last 6 Mo Used,
-        # [2] = Current New, [3] = Current Used
-        # (Each column also has a "Qty Avg Price" so actual matches may be doubled)
-        # Filter to get every other one (Avg Price, skip Qty Avg Price)
         keys = ["last6_new_avg", "last6_used_avg", "current_new_avg", "current_used_avg"]
-        prices = {}
-        avg_idx = 0
-        for i, val in enumerate(matches):
-            if i % 2 == 0 and avg_idx < 4:  # Take 1st, skip 2nd (Qty Avg) per column
-                prices[keys[avg_idx]] = val
-                avg_idx += 1
+        prices = {keys[i]: matches[i] for i in range(min(len(matches), 4))}
 
         return {k: prices.get(k, "") for k in empty}
 

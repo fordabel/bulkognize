@@ -25,7 +25,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "bulkognize-" + uuid.uuid4().hex)
 
 BRICKOGNIZE_URL = "https://api.brickognize.com/predict/"
-BULK_DELAY = 1  # seconds between API calls in bulk mode
+BULK_DELAY = 0.3  # seconds between API calls in bulk mode
 
 # Store bulk results in a temp directory keyed by session
 RESULTS_DIR = os.path.join(tempfile.gettempdir(), "bulkognize_results")

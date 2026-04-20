@@ -173,8 +173,15 @@ def detect_and_crop(image_bytes):
     img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
     h, w = img.shape[:2]
+    short_side = min(h, w)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (7, 7), 0)
+
+    # Blur kernel scales with image size so it actually smooths over fine texture
+    # on big iPhone photos. Gaussian kernel must be odd.
+    blur_k = max(7, short_side // 100)
+    if blur_k % 2 == 0:
+        blur_k += 1
+    blurred = cv2.GaussianBlur(gray, (blur_k, blur_k), 0)
 
     _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
@@ -186,36 +193,61 @@ def detect_and_crop(image_bytes):
     if corner_mean > 127:
         binary = cv2.bitwise_not(binary)
 
-    # Clean up small specks and fill small holes inside figures.
-    kernel = np.ones((7, 7), np.uint8)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+    # Big CLOSE kernel bridges the within-figure gaps (helmet ↔ torso ↔ legs)
+    # so one minifig is one contour. Smaller OPEN kernel strips grain specks
+    # without re-splitting the figure.
+    close_k = max(15, short_side // 40)
+    open_k = max(5, short_side // 250)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, np.ones((close_k, close_k), np.uint8))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((open_k, open_k), np.uint8))
 
     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     total_area = h * w
-    min_area = total_area * 0.004  # skip tiny specks (< 0.4% of image)
-    max_area = total_area * 0.6    # skip giant blobs that are probably the background
+    min_area = total_area * 0.01   # skip specks (< 1% of image)
+    max_area = total_area * 0.6    # skip the background itself
 
+    # Collect as (x1, y1, x2, y2) for easy merging.
     boxes = []
     for cnt in contours:
         x, y, bw, bh = cv2.boundingRect(cnt)
         if bw * bh < min_area or bw * bh > max_area:
             continue
-        boxes.append((x, y, bw, bh))
+        boxes.append([x, y, x + bw, y + bh])
 
-    # Sort roughly top-to-bottom, then left-to-right (rows bucketed by ~10% of image height).
+    # Safety-net merge: any two boxes within merge_pad of each other become one.
+    # Handles the case where morphology didn't quite bridge a fig's gap.
+    merge_pad = max(10, short_side // 50)
+    changed = True
+    while changed:
+        changed = False
+        i = 0
+        while i < len(boxes):
+            j = i + 1
+            while j < len(boxes):
+                a, b = boxes[i], boxes[j]
+                if (a[0] - merge_pad < b[2] and b[0] - merge_pad < a[2]
+                        and a[1] - merge_pad < b[3] and b[1] - merge_pad < a[3]):
+                    boxes[i] = [min(a[0], b[0]), min(a[1], b[1]),
+                                max(a[2], b[2]), max(a[3], b[3])]
+                    boxes.pop(j)
+                    changed = True
+                else:
+                    j += 1
+            i += 1
+
+    # Sort roughly top-to-bottom, then left-to-right.
     row_bucket = max(1, h // 10)
     boxes.sort(key=lambda b: (b[1] // row_bucket, b[0]))
 
     crops = []
-    pad = max(10, min(h, w) // 80)
-    for x, y, bw, bh in boxes:
-        x1 = max(0, x - pad)
-        y1 = max(0, y - pad)
-        x2 = min(w, x + bw + pad)
-        y2 = min(h, y + bh + pad)
-        crop = img[y1:y2, x1:x2]
+    pad = max(10, short_side // 80)
+    for x1, y1, x2, y2 in boxes:
+        xp1 = max(0, x1 - pad)
+        yp1 = max(0, y1 - pad)
+        xp2 = min(w, x2 + pad)
+        yp2 = min(h, y2 + pad)
+        crop = img[yp1:yp2, xp1:xp2]
         ok, buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 90])
         if ok:
             crops.append(buf.tobytes())

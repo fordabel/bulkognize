@@ -38,6 +38,10 @@ BULK_DELAY = 0.3  # seconds between API calls in bulk mode
 RESULTS_DIR = os.path.join(tempfile.gettempdir(), "bulkognize_results")
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
+# Build/deploy identity — shown in the header so you can tell when a push is live.
+APP_COMMIT = (os.environ.get("RENDER_GIT_COMMIT") or "local")[:7]
+APP_DEPLOYED_AT = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
 
 def call_brickognize(image_bytes, filename="image.jpg"):
     """Send an image to the Brickognize API and return parsed results."""
@@ -76,7 +80,11 @@ def call_brickognize(image_bytes, filename="image.jpg"):
 def index():
     if "session_id" not in session:
         session["session_id"] = uuid.uuid4().hex
-    return render_template("index.html")
+    return render_template(
+        "index.html",
+        app_commit=APP_COMMIT,
+        app_deployed_at=APP_DEPLOYED_AT,
+    )
 
 
 @app.route("/api/predict", methods=["POST"])

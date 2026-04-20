@@ -19,9 +19,14 @@ import re
 import cv2
 import numpy as np
 import requests
+from PIL import Image, ImageOps
+import pillow_heif
 from flask import (
     Flask, render_template, request, jsonify, send_file, session
 )
+
+# Let Pillow decode HEIC/HEIF (iPhone photos).
+pillow_heif.register_heif_opener()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "bulkognize-" + uuid.uuid4().hex)
@@ -151,10 +156,13 @@ def detect_and_crop(image_bytes):
     Uses Otsu thresholding + contour finding. Auto-flips polarity based on
     corner brightness so it works for both light and dark backgrounds.
     """
-    arr = np.frombuffer(image_bytes, dtype=np.uint8)
-    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    if img is None:
+    # Use Pillow so we accept HEIC/HEIF from iPhones and honor EXIF orientation.
+    try:
+        pil_img = Image.open(io.BytesIO(image_bytes))
+        pil_img = ImageOps.exif_transpose(pil_img).convert("RGB")
+    except Exception:
         return []
+    img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
     h, w = img.shape[:2]
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)

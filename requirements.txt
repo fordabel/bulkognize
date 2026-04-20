@@ -3,3 +3,5 @@ requests
 gunicorn
 opencv-python-headless
 numpy
+pillow
+pillow-heif

@@ -218,66 +218,6 @@
     }
 
     // ============================================================
-    //  MULTI-FIG PHOTO (one image, detect & identify each figure)
-    // ============================================================
-
-    var multiFileInput = document.getElementById("multi-file");
-
-    multiFileInput.addEventListener("change", function () {
-        if (!this.files[0]) return;
-        var file = this.files[0];
-        this.value = "";  // let them pick the same file again if needed
-
-        bulkError.style.display = "none";
-        bulkResults.style.display = "none";
-
-        bulkProgress.style.display = "block";
-        bulkProgressText.textContent = "Detecting figures in photo...";
-        bulkProgressCount.textContent = "";
-        bulkProgressFill.style.width = "0%";
-
-        var fakeProgress = 0;
-        var progressInterval = setInterval(function () {
-            if (fakeProgress < 90) {
-                fakeProgress += (90 - fakeProgress) * 0.04;
-                bulkProgressFill.style.width = fakeProgress + "%";
-                bulkProgressText.textContent = "Identifying each figure...";
-            }
-        }, 500);
-
-        var formData = new FormData();
-        formData.append("image", file);
-
-        fetch("/api/multi", { method: "POST", body: formData })
-            .then(function (resp) {
-                return resp.json().then(function (data) {
-                    return { ok: resp.ok, data: data };
-                });
-            })
-            .then(function (payload) {
-                clearInterval(progressInterval);
-                bulkProgressFill.style.width = "100%";
-                bulkProgressText.textContent = "Done!";
-
-                setTimeout(function () {
-                    bulkProgress.style.display = "none";
-                    if (!payload.ok || payload.data.error) {
-                        bulkErrorMsg.textContent = payload.data.error || "Something went wrong.";
-                        bulkError.style.display = "flex";
-                        return;
-                    }
-                    renderBulkResults(payload.data);
-                }, 400);
-            })
-            .catch(function () {
-                clearInterval(progressInterval);
-                bulkProgress.style.display = "none";
-                bulkErrorMsg.textContent = "Could not connect to the server. Please try again.";
-                bulkError.style.display = "flex";
-            });
-    });
-
-    // ============================================================
     //  HELPERS
     // ============================================================
 

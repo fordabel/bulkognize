@@ -16,6 +16,8 @@ from datetime import datetime
 
 import re
 
+import cv2
+import numpy as np
 import requests
 from flask import (
     Flask, render_template, request, jsonify, send_file, session
@@ -139,6 +141,124 @@ def bulk_predict():
         "results": all_results,
         "errors": errors,
         "total": len(all_results),
+    })
+
+
+def detect_and_crop(image_bytes):
+    """Find distinct foreground objects in an image and return them as JPEG bytes.
+
+    Designed for photos of multiple minifigs/pieces on a plain-ish background.
+    Uses Otsu thresholding + contour finding. Auto-flips polarity based on
+    corner brightness so it works for both light and dark backgrounds.
+    """
+    arr = np.frombuffer(image_bytes, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return []
+
+    h, w = img.shape[:2]
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (7, 7), 0)
+
+    _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    # If corners (likely background) are bright, invert so foreground = white.
+    corner_mean = float(np.mean([
+        blurred[0, 0], blurred[0, -1],
+        blurred[-1, 0], blurred[-1, -1],
+    ]))
+    if corner_mean > 127:
+        binary = cv2.bitwise_not(binary)
+
+    # Clean up small specks and fill small holes inside figures.
+    kernel = np.ones((7, 7), np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    total_area = h * w
+    min_area = total_area * 0.004  # skip tiny specks (< 0.4% of image)
+    max_area = total_area * 0.6    # skip giant blobs that are probably the background
+
+    boxes = []
+    for cnt in contours:
+        x, y, bw, bh = cv2.boundingRect(cnt)
+        if bw * bh < min_area or bw * bh > max_area:
+            continue
+        boxes.append((x, y, bw, bh))
+
+    # Sort roughly top-to-bottom, then left-to-right (rows bucketed by ~10% of image height).
+    row_bucket = max(1, h // 10)
+    boxes.sort(key=lambda b: (b[1] // row_bucket, b[0]))
+
+    crops = []
+    pad = max(10, min(h, w) // 80)
+    for x, y, bw, bh in boxes:
+        x1 = max(0, x - pad)
+        y1 = max(0, y - pad)
+        x2 = min(w, x + bw + pad)
+        y2 = min(h, y + bh + pad)
+        crop = img[y1:y2, x1:x2]
+        ok, buf = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        if ok:
+            crops.append(buf.tobytes())
+
+    return crops
+
+
+@app.route("/api/multi", methods=["POST"])
+def multi_predict():
+    """One photo with multiple figures/pieces: detect each, identify each."""
+    if "image" not in request.files:
+        return jsonify({"error": "No image provided"}), 400
+
+    file = request.files["image"]
+    if file.filename == "":
+        return jsonify({"error": "No image selected"}), 400
+
+    image_bytes = file.read()
+    crops = detect_and_crop(image_bytes)
+
+    if not crops:
+        return jsonify({
+            "error": "Couldn't find distinct figures in that photo. "
+                     "Try a clearer photo on a plain background with the figures separated."
+        }), 400
+
+    all_results = []
+    errors = []
+    base_name = os.path.splitext(file.filename)[0] or "photo"
+
+    for i, crop_bytes in enumerate(crops):
+        crop_name = f"{base_name}_fig{i + 1}.jpg"
+        results = call_brickognize(crop_bytes, crop_name)
+
+        if isinstance(results, dict) and "error" in results:
+            errors.append({"filename": crop_name, "error": results["error"]})
+        else:
+            img_b64 = base64.b64encode(crop_bytes).decode("utf-8")
+            all_results.append({
+                "filename": crop_name,
+                "uploaded_image": f"data:image/jpeg;base64,{img_b64}",
+                "predictions": results,
+            })
+
+        if i < len(crops) - 1:
+            time.sleep(BULK_DELAY)
+
+    # Save under the same session key so the existing CSV download works.
+    if "session_id" not in session:
+        session["session_id"] = uuid.uuid4().hex
+    results_path = os.path.join(RESULTS_DIR, f"{session['session_id']}.json")
+    with open(results_path, "w") as f:
+        json.dump(all_results, f)
+
+    return jsonify({
+        "results": all_results,
+        "errors": errors,
+        "total": len(all_results),
+        "detected": len(crops),
     })
 
 

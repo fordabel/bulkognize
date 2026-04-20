@@ -28,9 +28,10 @@
     <main>
         <div class="card upload-card">
             <h2 style="margin-bottom:8px;">A tool that applies Brickognize to multiple photos at once!</h2>
-            <h3 style="font-weight:normal; margin:4px 0;">Two options:</h3>
+            <h3 style="font-weight:normal; margin:4px 0;">Three options:</h3>
             <p class="hint" style="margin:2px 0 2px 12px;">1) Take a series of photos with your camera</p>
-            <p class="hint" style="margin:2px 0 12px 12px;">2) Choose photos from your gallery</p>
+            <p class="hint" style="margin:2px 0 2px 12px;">2) Choose photos from your gallery</p>
+            <p class="hint" style="margin:2px 0 12px 12px;">3) One photo of several figures on a plain background &mdash; we&rsquo;ll split them up</p>
 
             <div class="upload-buttons">
                 <label class="btn btn-primary btn-large" for="bulk-camera">
@@ -44,6 +45,12 @@
                     Choose Files
                 </label>
                 <input type="file" id="bulk-files" accept="image/*" multiple hidden>
+
+                <label class="btn btn-secondary btn-large" for="multi-file">
+                    <span class="btn-icon">&#128444;</span>
+                    Multi-Fig Photo
+                </label>
+                <input type="file" id="multi-file" accept="image/*" hidden>
             </div>
 
             <div class="drop-zone" id="bulk-drop">
